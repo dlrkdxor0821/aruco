@@ -41,13 +41,28 @@ class ArucoDetector:
     """JPEG/이미지에서 ArUco 마커를 찾아 [{id, corners}] 리스트로 돌려준다."""
 
     def __init__(self, dict_name="DICT_4X4_50"):
-        aruco_dict = cv2.aruco.getPredefinedDictionary(ARUCO_DICTS[dict_name])
-        self.detector = cv2.aruco.ArucoDetector(
-            aruco_dict, cv2.aruco.DetectorParameters())
+        dict_id = ARUCO_DICTS[dict_name]
+        # OpenCV 버전에 따라 aruco API 가 다르다 (4.7+ 신 API vs 구 API).
+        if hasattr(cv2.aruco, "ArucoDetector"):  # OpenCV >= 4.7
+            aruco_dict = cv2.aruco.getPredefinedDictionary(dict_id)
+            self.detector = cv2.aruco.ArucoDetector(
+                aruco_dict, cv2.aruco.DetectorParameters())
+            self._new_api = True
+        else:  # OpenCV < 4.7 (구 API)
+            if hasattr(cv2.aruco, "getPredefinedDictionary"):
+                self._dict = cv2.aruco.getPredefinedDictionary(dict_id)
+            else:
+                self._dict = cv2.aruco.Dictionary_get(dict_id)
+            self._params = cv2.aruco.DetectorParameters_create()
+            self._new_api = False
 
     def detect(self, img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        corners, ids, _ = self.detector.detectMarkers(gray)
+        if self._new_api:
+            corners, ids, _ = self.detector.detectMarkers(gray)
+        else:
+            corners, ids, _ = cv2.aruco.detectMarkers(
+                gray, self._dict, parameters=self._params)
         out = []
         if ids is not None:
             for marker_id, c in zip(ids.flatten(), corners):
