@@ -43,3 +43,4 @@ python3 generate_marker.py --all 4 --dict DICT_4X4_50 --size 400
 - 이 카메라는 보통 화면이 뒤집혀 `--rotate 180` 이 필요하다.
 - 다른 마커 사전을 쓰려면 server/client 의 `--dict` 를 동일하게 맞춘다.
 # aruco
+# aruco
