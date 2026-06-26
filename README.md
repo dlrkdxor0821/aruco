@@ -33,7 +33,7 @@ Pi 단독으로 확인하려면 같은 Pi에서 `./run_laptop.sh` 를 띄우고
 
 ## 테스트 마커
 ```bash
-python3 generate_marker.py --all 4 --dict DICT_4X4_50 --size 400
+python3 generate_marker.py --all 4 --dict DICT_6X6_250 --size 400
 # markers/ 폴더의 PNG를 화면에 띄우거나 인쇄해 카메라에 보여준다
 ```
 

@@ -3,7 +3,7 @@
 # Pi가 보낸 카메라 프레임을 받아 마커를 검출하고 결과를 되돌려준다.
 #
 # 사용법:
-#   ./run_laptop.sh              # 기본 포트 9000, DICT_4X4_50
+#   ./run_laptop.sh              # 기본 포트 9000, DICT_6X6_250
 #   ./run_laptop.sh 9000 DICT_5X5_100
 #
 # 실행 후 출력되는 이 노트북의 IP를 Pi 쪽 run_pi.sh 에 넣어준다.
@@ -11,7 +11,7 @@ set -e
 cd "$(dirname "$0")"
 
 PORT="${1:-9000}"
-DICT="${2:-DICT_4X4_50}"
+DICT="${2:-DICT_6X6_250}"
 
 echo "================ ArUco 검출 서버 (laptop) ================"
 echo "이 노트북 IP 후보:"

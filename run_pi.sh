@@ -5,7 +5,7 @@
 #
 # 사용법:
 #   ./run_pi.sh <laptop-ip>                  # 기본값: 포트 9000, csi, rotate 180
-#   ./run_pi.sh 192.168.0.10 9000 DICT_4X4_50
+#   ./run_pi.sh 192.168.0.10 9000 DICT_6X6_250
 #
 # 서버(laptop)의 --dict 와 여기 사전 이름을 동일하게 맞춰야 한다.
 set -e
@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 
 HOST="${1:-}"
 PORT="${2:-9000}"
-DICT="${3:-DICT_4X4_50}"   # 참고용 — 실제 검출 사전은 서버(run_laptop.sh)에서 정한다
+DICT="${3:-DICT_6X6_250}"   # 참고용 — 실제 검출 사전은 서버(run_laptop.sh)에서 정한다
 ROTATE="${ROTATE:-180}"
 SOURCE="${SOURCE:-csi}"
 

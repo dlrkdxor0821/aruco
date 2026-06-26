@@ -21,7 +21,7 @@ ARUCO_DICTS = {
 
 def parse_args():
     p = argparse.ArgumentParser(description="ArUco 마커 이미지 생성")
-    p.add_argument("--dict", default="DICT_4X4_50", choices=list(ARUCO_DICTS))
+    p.add_argument("--dict", default="DICT_6X6_250", choices=list(ARUCO_DICTS))
     p.add_argument("--id", type=int, default=0, help="생성할 마커 ID")
     p.add_argument("--size", type=int, default=600, help="이미지 한 변 픽셀 크기")
     p.add_argument("--border", type=int, default=1, help="테두리 비트 두께")
