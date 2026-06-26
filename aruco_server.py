@@ -38,9 +38,15 @@ ARUCO_DICTS = {
 
 
 class ArucoDetector:
-    """JPEG/이미지에서 ArUco 마커를 찾아 [{id, corners}] 리스트로 돌려준다."""
+    """JPEG/이미지에서 ArUco 마커를 찾아 [{id, corners, ...자세}] 리스트로 돌려준다.
 
-    def __init__(self, dict_name="DICT_6X6_250"):
+    marker_size(마커 한 변, m) 가 주어지면 solvePnP 로 자세를 추정해
+    거리(m)와 3축 방향(이미지 좌표로 투영한 점)을 함께 돌려준다.
+    카메라 보정(camera_matrix/dist_coeffs)이 없으면 화각(hfov)으로 근사 K 를 만든다.
+    """
+
+    def __init__(self, dict_name="DICT_6X6_250", marker_size=None,
+                 camera_matrix=None, dist_coeffs=None, hfov_deg=54.0):
         dict_id = ARUCO_DICTS[dict_name]
         # OpenCV 버전에 따라 aruco API 가 다르다 (4.7+ 신 API vs 구 API).
         if hasattr(cv2.aruco, "ArucoDetector"):  # OpenCV >= 4.7
@@ -56,6 +62,26 @@ class ArucoDetector:
             self._params = cv2.aruco.DetectorParameters_create()
             self._new_api = False
 
+        self.marker_size = marker_size
+        self.hfov_deg = hfov_deg
+        self.K = camera_matrix
+        self.dist = dist_coeffs if dist_coeffs is not None else np.zeros((5, 1))
+        self._approx_K = camera_matrix is None  # 보정 파일 없으면 화각으로 추정
+        # 마커 좌표계 기준 네 꼭짓점 (중심이 원점, 마커는 X-Y 평면, Z=평면 바깥/정면)
+        if marker_size:
+            s = marker_size / 2.0
+            self._objp = np.array([[-s, s, 0], [s, s, 0],
+                                   [s, -s, 0], [-s, -s, 0]], dtype=np.float32)
+
+    def _ensure_K(self, w, h):
+        """보정 파일이 없을 때 이미지 크기 + 화각으로 근사 카메라 행렬 생성."""
+        if self.K is not None:
+            return
+        f = (w / 2.0) / np.tan(np.deg2rad(self.hfov_deg) / 2.0)
+        self.K = np.array([[f, 0, w / 2.0],
+                           [0, f, h / 2.0],
+                           [0, 0, 1]], dtype=np.float64)
+
     def detect(self, img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self._new_api:
@@ -64,14 +90,38 @@ class ArucoDetector:
             corners, ids, _ = cv2.aruco.detectMarkers(
                 gray, self._dict, parameters=self._params)
         out = []
-        if ids is not None:
-            for marker_id, c in zip(ids.flatten(), corners):
-                pts = c.reshape(4, 2)
-                out.append({
-                    "id": int(marker_id),
-                    "corners": pts.tolist(),
-                    "center": pts.mean(axis=0).tolist(),
-                })
+        if ids is None:
+            return out
+
+        do_pose = self.marker_size is not None
+        if do_pose:
+            self._ensure_K(img.shape[1], img.shape[0])
+
+        for marker_id, c in zip(ids.flatten(), corners):
+            pts = c.reshape(4, 2)
+            d = {
+                "id": int(marker_id),
+                "corners": pts.tolist(),
+                "center": pts.mean(axis=0).tolist(),
+            }
+            if do_pose:
+                ok, rvec, tvec = cv2.solvePnP(
+                    self._objp, pts.astype(np.float32), self.K, self.dist,
+                    flags=cv2.SOLVEPNP_IPPE_SQUARE)
+                if ok:
+                    L = self.marker_size  # 축 길이 = 마커 한 변
+                    axis3d = np.float32([[0, 0, 0], [L, 0, 0],
+                                         [0, L, 0], [0, 0, L]])
+                    axis2d, _ = cv2.projectPoints(
+                        axis3d, rvec, tvec, self.K, self.dist)
+                    R, _ = cv2.Rodrigues(rvec)
+                    # 마커가 향하는 방향(정면 = 마커의 +Z)과 정면 대비 기울기
+                    yaw = float(np.degrees(np.arctan2(R[1, 0], R[0, 0])))
+                    d["distance_m"] = round(float(np.linalg.norm(tvec)), 3)
+                    d["yaw_deg"] = round(yaw, 1)
+                    d["axes_2d"] = axis2d.reshape(-1, 2).tolist()  # [원점, X끝, Y끝, Z끝]
+                    d["approx"] = self._approx_K  # 근사 보정 여부
+            out.append(d)
         return out
 
 
@@ -80,9 +130,26 @@ def main():
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=9000)
     ap.add_argument("--dict", default="DICT_6X6_250", choices=list(ARUCO_DICTS))
+    ap.add_argument("--marker-size", type=float, default=0.05,
+                    help="마커 한 변 실제 길이(m). 거리/방향 추정에 필요 (기본 0.05=5cm)")
+    ap.add_argument("--calib", default=None,
+                    help="카메라 보정 .npz 경로(camera_matrix, dist_coeffs). "
+                         "없으면 --hfov 로 근사 (거리는 대략값)")
+    ap.add_argument("--hfov", type=float, default=54.0,
+                    help="보정 파일이 없을 때 쓸 수평화각(도). ov5647 표준렌즈 ≈54")
     args = ap.parse_args()
 
-    detector = ArucoDetector(args.dict)
+    K = dist = None
+    if args.calib:
+        data = np.load(args.calib)
+        K, dist = data["camera_matrix"], data["dist_coeffs"]
+        print(f"[calib] {args.calib} 로 정확 자세추정")
+    else:
+        print(f"[calib] 보정 파일 없음 → 화각 {args.hfov}° 로 근사 (거리는 대략값)")
+
+    detector = ArucoDetector(args.dict, marker_size=args.marker_size,
+                             camera_matrix=K, dist_coeffs=dist, hfov_deg=args.hfov)
+    print(f"[pose] 마커 크기 {args.marker_size} m 로 거리/방향 추정")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)

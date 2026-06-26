@@ -42,15 +42,35 @@ _lock = threading.Lock()
 _stop = threading.Event()
 
 
+RED = (0, 0, 255)  # BGR
+
+
 def draw_markers(frame, dets):
-    """서버가 돌려준 검출 결과를 프레임에 그린다."""
+    """서버가 돌려준 검출 결과(테두리/방향 화살표/거리)를 프레임에 그린다."""
     import numpy as np
     for d in dets:
         pts = np.array(d["corners"], dtype=np.int32)
         cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
         cx, cy = (int(v) for v in d["center"])
-        cv2.putText(frame, f'id={d["id"]}', (cx - 10, cy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+
+        # 자세가 있으면 3축 화살표(빨강 X·초록 Y·파랑 Z=마커 정면 방향)
+        if "axes_2d" in d:
+            o, ax, ay, az = (tuple(map(int, p)) for p in d["axes_2d"])
+            cv2.arrowedLine(frame, o, ax, (0, 0, 255), 2, tipLength=0.2)   # X
+            cv2.arrowedLine(frame, o, ay, (0, 255, 0), 2, tipLength=0.2)   # Y
+            cv2.arrowedLine(frame, o, az, (255, 0, 0), 3, tipLength=0.25)  # Z=정면
+
+        # 마커 바로 옆에 빨간 글자로 id/거리/방향 표시
+        x_text = int(pts[:, 0].max()) + 6  # 마커 오른쪽 끝 바로 옆
+        y_text = int(pts[:, 1].min()) + 14
+        lines = [f'id={d["id"]}']
+        if "distance_m" in d:
+            tag = "~" if d.get("approx") else ""  # 근사 보정이면 ~ 표시
+            lines.append(f'{tag}{d["distance_m"]:.2f} m')
+            lines.append(f'yaw {d["yaw_deg"]:.0f}deg')
+        for i, t in enumerate(lines):
+            cv2.putText(frame, t, (x_text, y_text + i * 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, cv2.LINE_AA)
 
 
 def capture_loop(args):

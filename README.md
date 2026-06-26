@@ -37,6 +37,21 @@ python3 generate_marker.py --all 4 --dict DICT_6X6_250 --size 400
 # markers/ 폴더의 PNG를 화면에 띄우거나 인쇄해 카메라에 보여준다
 ```
 
+## 거리·방향(자세) 표시
+서버가 `solvePnP`로 각 마커의 거리(m)·yaw(도)를 추정하고, 클라이언트가
+마커 옆에 **빨간 글자**로 표시하며 **방향 화살표**(빨강 X·초록 Y·파랑 Z=정면)를 그린다.
+
+- **마커 실제 크기를 반드시 맞춰야** 거리가 맞다: `MARKER=0.08 ./run_laptop.sh` (8cm).
+- 보정 파일이 없으면 화각으로 근사하며, 거리 앞에 `~`가 붙는다(대략값).
+- **정확한 거리**가 필요하면 Pi에서 체커보드 1회 보정:
+  ```bash
+  # Pi 에서 (실제 쓸 카메라/해상도로)
+  python3 calibrate_camera.py --cols 9 --rows 6 --square 0.025
+  #  → calib.npz 생성. 이 파일을 노트북으로 복사한 뒤
+  # 노트북 에서
+  CALIB=calib.npz MARKER=0.08 ./run_laptop.sh
+  ```
+
 ## 참고
 - CSI 카메라(ov5647)는 OpenCV `VideoCapture`로는 검은 화면만 나와서
   반드시 picamera2(`common.camera.Camera(source="csi")`)를 거친다.
