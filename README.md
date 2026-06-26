@@ -1,16 +1,17 @@
-# ArUco 마커 인식 (Pi 검출 → 정보만 전송 → laptop 시각화)
+# ArUco 마커 인식 (Pi 검출 → 영상+값 전송 → laptop 시각화)
 
-**Pi 가 카메라 프레임에서 ArUco 를 직접 검출**하고, 추출한 마커 정보(id·꼭짓점·거리·yaw)만
-작은 JSON(수백 바이트)으로 laptop 에 UDP 전송한다. **이미지/프레임은 보내지 않는다.**
-laptop 은 그 정보를 받아 캔버스에 테두리·방향 화살표·거리(빨간 글자)를 그려 보여준다.
-→ 대역폭이 작아(한 프레임 ≈ 0.4KB) WiFi 손실로 인한 끊김이 거의 없다.
+**Pi 가 카메라에서 ArUco 를 직접 검출**하고, 한 프레임마다 **카메라 영상(JPEG) + 마커 값**
+(id·꼭짓점·거리·yaw)을 하나로 묶어 laptop 에 청크 UDP(`protocol.py`)로 보낸다.
+**Pi 에서는 아무 화면도 띄우지 않는다.** laptop 이 받아서 **실제 카메라 영상 위에**
+테두리·방향 화살표·거리(빨간 글자)를 그려 창으로 보여준다.
 
 ## 파일 (현재 구조)
-- `run_pi.sh` — **라즈베리파이에서 실행.** 카메라 캡처 → ArUco 검출 → 정보만 송신.
-- `run_laptop.sh` — **노트북에서 실행.** 정보 수신 → 화면 창에 시각화.
-- `pi_detect_send.py` — Pi: 검출 후 마커 정보 JSON 을 UDP 로 전송.
-- `laptop_visualize.py` — laptop: JSON 수신 → 캔버스에 그려 cv2 창으로 표시.
+- `run_pi.sh` — **라즈베리파이에서 실행.** 카메라 캡처 → ArUco 검출 → 영상+값 송신.
+- `run_laptop.sh` — **노트북에서 실행.** 영상+값 수신 → 실제 영상에 오버레이해 창 표시.
+- `pi_detect_send.py` — Pi: 검출 후 [값 JSON + JPEG] 를 청크 UDP 로 전송.
+- `laptop_visualize.py` — laptop: 재조립 → 영상 디코딩 → 값 오버레이 → 브라우저 MJPEG.
 - `aruco_server.py` — `ArucoDetector`(검출+자세추정) 정의. Pi 가 import 해서 씀.
+- `protocol.py` — 청크 UDP 프레이밍(pinky_perception 과 동일 방식).
 - `viz.py` — 그리기 공용 함수(테두리/화살표/빨간 글자). 양쪽이 공유.
 - `calibrate_camera.py` — Pi 에서 체커보드로 정확 보정 → `calib.npz`.
 - `generate_marker.py` — 테스트용 마커 PNG 생성.
@@ -22,16 +23,15 @@ laptop 은 그 정보를 받아 캔버스에 테두리·방향 화살표·거리
 
 # ── 라즈베리파이(Pi) ──  위에서 본 노트북 IP + 마커 실제 크기(m).
 MARKER=0.08 ./run_pi.sh <laptop-ip>
+
+# ── 노트북 브라우저에서 열기 ──
+#    http://<노트북-IP>:8090/   (또는 http://localhost:8090/)
 ```
-노트북 화면 창에 마커 박스·방향 화살표·거리/yaw(빨간 글자)가 실시간 표시된다(q 종료).
+브라우저에 **실제 카메라 영상** + 마커 박스·방향 화살표·거리/yaw(빨간 글자)가 표시된다.
 
-> 노트북에는 이 폴더(`laptop_visualize.py`, `viz.py`)와 OpenCV/numpy만 있으면 된다
-> (카메라가 없으니 pinky_perception 불필요). Pi 쪽 카메라만 `pinky_perception` 의
-> `common/camera.py`(picamera2)를 쓴다.
-
-### 다른 모드 (참고)
-- `detect_pi.py` / `run_pi_solo.sh` — Pi 단독: 검출도 표시도 Pi 에서, 브라우저로 확인.
-- `aruco_client.py` — (구) Pi 가 프레임을 보내고 서버가 검출하던 방식.
+> 노트북에는 이 폴더(`laptop_visualize.py`, `viz.py`, `protocol.py`)와 OpenCV/numpy 만
+> 있으면 된다(카메라·디스플레이 불필요 — 브라우저로 봄, pinky_perception 불필요).
+> Pi 쪽 카메라만 `pinky_perception` 의 `common/camera.py`(picamera2)를 쓴다.
 
 ## 테스트 마커
 ```bash
